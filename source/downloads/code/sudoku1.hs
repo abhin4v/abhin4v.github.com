@@ -7,12 +7,15 @@ import qualified Data.Map as M
 import Data.Char (digitToInt, intToDigit)
 import Data.List (foldl', intersperse, intercalate)
 import Data.List.Split (chunksOf)
+import Data.Map ((!))
 import Control.Monad (foldM, guard)
 data Digit = ONE | TWO | TRE | FOR | FIV | SIX | SVN | EGT | NIN
              deriving (Eq, Ord, Enum)
 
 instance Show Digit where
   show digit = show $ fromEnum digit + 1
+
+allDigits = S.fromList [ONE .. NIN]
 
 data Cell = Cell { cellIdx :: Int, cellVals :: S.Set Digit }
             deriving (Eq)
@@ -23,7 +26,7 @@ instance Show Cell where
 type Board = M.Map Int Cell
 
 emptyBoard :: Board
-emptyBoard = foldl' (\m i -> M.insert i (Cell i $ S.fromList [ONE .. NIN]) m) 
+emptyBoard = foldl' (\m i -> M.insert i (Cell i allDigits) m) 
                     M.empty [0 .. 80]
 readBoard :: String -> Maybe Board
 readBoard str = do
@@ -31,7 +34,7 @@ readBoard str = do
   foldM (\board (i, chr) -> do
             guard $ chr == '.' || (chr `S.member` S.fromList ['1' .. '9'])
             let cellVals = if chr == '.'
-                             then S.fromList [ONE .. NIN]
+                             then allDigits
                              else S.singleton $ toEnum $ digitToInt chr - 1
             return $ M.insert i (Cell i cellVals) board)
         emptyBoard 
@@ -53,3 +56,26 @@ asciiShowBoard =
   . chunksOf 9
   . showBoard
   where border = "+-------+-------+-------+"
+data BoardState = SOLVED | INCOMPLETE | INVALID
+                  deriving (Eq, Show)
+
+boardState :: Board -> BoardState
+boardState board
+  | any (\Cell{..} -> S.size cellVals /= 1) $ M.elems board = INCOMPLETE
+  | any isUnitInvalid units = INVALID
+  | otherwise = SOLVED
+  where
+    isUnitInvalid unitCells = 
+      (S.fromList . map (head . S.toList . cellVals) $ unitCells) /= allDigits
+
+    units = map (map (board !)) unitIxs
+
+unitIxs   = rowIxs ++ columnIxs ++ blockIxs
+rowIxs    = map (\i -> [i * 9 .. i * 9 + 8]) [0..8]
+columnIxs = map (\i -> take 9 [i, i + 9 ..]) [0..8]
+blockIxs  = 
+  concatMap (\(row1:row2:row3:_) ->
+                zipWith3 (\blockRow1 blockRow2 blockRow3 ->
+                             blockRow1 ++ blockRow2 ++ blockRow3) 
+                         row1 row2 row3)
+  . chunksOf 3 . map (chunksOf 3) $ rowIxs
