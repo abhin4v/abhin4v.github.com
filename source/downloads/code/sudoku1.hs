@@ -10,6 +10,7 @@ import Data.List.Split (chunksOf)
 import Data.Maybe (fromJust)
 import Data.Ord (comparing)
 import Control.Monad (foldM, guard)
+
 data Digit = ONE | TWO | TRE | FOR | FIV | SIX | SVN | EGT | NIN
              deriving (Eq, Ord, Enum)
 
@@ -39,6 +40,7 @@ updateBoard (Board ixMap) cell@Cell{..} = Board (M.insert cellIdx cell ixMap)
 emptyBoard :: Board
 emptyBoard = 
   Board $ foldl' (\m i -> M.insert i (Cell i allDigits) m) M.empty [0 .. 80]
+
 readBoard :: String -> Maybe Board
 readBoard str = do
   guard $ length str == 81
@@ -50,6 +52,7 @@ readBoard str = do
             return $ updateBoard board (Cell i cellVals))
         emptyBoard 
         $ zip [0 .. 80 ] str
+
 showBoard :: Board -> String
 showBoard =
   map (\Cell{..} ->
@@ -70,6 +73,7 @@ asciiShowBoard =
 
 instance Show Board where
   show = showBoard
+
 data BoardState = SOLVED | INCOMPLETE | INVALID
                   deriving (Eq, Show)
 
@@ -93,6 +97,7 @@ blockIxs  =
                              blockRow1 ++ blockRow2 ++ blockRow3) 
                          row1 row2 row3)
   . chunksOf 3 . map (chunksOf 3) $ rowIxs
+
 dfs :: Ord a => a -> (a -> [a]) -> (a -> Bool) -> [a]
 dfs start getNext isGoal = go start S.empty
   where 

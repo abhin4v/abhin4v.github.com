@@ -38,7 +38,7 @@ Basic setup
 > import Data.Maybe (fromJust)
 > import Data.Ord (comparing)
 > import Control.Monad (foldM, guard)
->
+> 
 
 Now that the imports are out of the way let's setup the basic functionalities.
  
@@ -71,7 +71,7 @@ Now that the imports are out of the way let's setup the basic functionalities.
 > emptyBoard :: Board
 > emptyBoard = 
 >   Board $ foldl' (\m i -> M.insert i (Cell i allDigits) m) M.empty [0 .. 80]
->
+> 
 
 A `Digit` is just one of the nine possible values. It derives `Eq`, `Ord` and `Enum`. We use the
 fact the `Digit` is enumerable to create a custom `Show` instance which is just the `Digit`'s ordinal
@@ -115,7 +115,7 @@ right column. An example:
 >             return $ updateBoard board (Cell i cellVals))
 >         emptyBoard 
 >         $ zip [0 .. 80 ] str
->
+> 
 
 `readBoard` converts a string to a `Board`. It returns `Just Board` if the string represents a valid
 Sudoku board, otherwise it returns `Nothing`. We use the `Monad` nature of `Maybe` to guard against the
@@ -143,7 +143,7 @@ string contained a digit at the cell index else they have all the digits as cell
 > 
 > instance Show Board where
 >   show = showBoard
->
+> 
 
 `showBoard` does the reverse of `readBoard`. It takes a board and creates a valid string
 representation of it. It does so by mapping over each cell of the board in the order of their index
@@ -181,7 +181,7 @@ Here is an example run in _ghci_:
 Is it solved yet?
 --------------------
 
-Before we proceed to write a full-fledged Sudoku solver, it is good to have a function which tells us
+Before we proceed to write a full-fledged Sudoku solver, we must have a function which tells us
 whether a board is filled completely and whether that solution is a valid one.
 
 > data BoardState = SOLVED | INCOMPLETE | INVALID
@@ -207,7 +207,7 @@ whether a board is filled completely and whether that solution is a valid one.
 >                              blockRow1 ++ blockRow2 ++ blockRow3) 
 >                          row1 row2 row3)
 >   . chunksOf 3 . map (chunksOf 3) $ rowIxs
->
+> 
 
 We start by defining the board state as an enumeration of three value corresponding to the solved,
 incomplete and invalid states. The `boardState` function takes a board and gives its current state.
@@ -305,7 +305,7 @@ a node in the search graph with the moves linking them as edges. A move is filli
 with a digit. So now we can solve the board just by finding a path from the given board configuration
 to a configuration where all cells are filled.
 
-We can use [Depth first Search][5] (DSF) algorithm to accomplish this. DFS is a brute force
+We can use [Depth first Search][5] (DFS) algorithm to accomplish this. DFS is a brute force
 technique and in worst case it may visit all the nodes in the search graph. In case of Sudoku, this
 search graph is very large (approximately 6.67×10<sup>21</sup>) so this is not a very efficient way 
 of solving Sudoku. For now, we'll add one optimization in DFS: while listing the next possible 
@@ -335,7 +335,38 @@ We can write this in two parts: a general DFS function and a solver which uses i
 >       $ board
 > 
 
-Let's try this out in _ghci_ now:
+The `dfs` functions is a literal translation of the DFS algorithm. It visits the graph node by node,
+keeping a track of the nodes visited and the goals seen till now. It first checks if the current
+node is a goal and if so it just returns it wrapped in a list. If the current node is not a goal, it
+checks if has already been visited and if so just returns an empty list. This is done to avoid getting
+stuck into infinite loops, going down the same path again and again. If both of these checks fail then
+it gets to the general case in which it just finds all the next nodes for the current node,
+recursively maps itself over them accumulating all the goals found (by flattening the lists) and 
+returns them.
+
+`dfsSolver` uses `dfs` to solve Sudoku as a DFS by supplying the `getNext` and `isGoal` functions.
+the `isGoal` function is simple, it just checks if the current board is solved by calling the 
+`boardState` function. `nextBoards` is a little complicated so let's go over it step by step, 
+reading from bottom to up:
+
+1. it gets all the cells in the board
+2. filters in only the empty cells, the cells with more than one cell values
+3. sorts the empty cells comparing the count of their cell values
+4. for each cell, it takes each cell value and create a cell containing only that cell value and
+flattens this list of list of cells into a list of cells
+5. for each cell so created, it creates a board by updating the current board with that cell
+
+So in effect, it goes over all the empty cells in the board in ascending order of their cell value
+count, picking each cell value in turn and creating a board where that cell is filled with that cell
+value. Hence it outputs all the next board configurations for the current board.
+
+And then `dfs` goes to work; it goes over all the whole graph and finds all the solutions. Note that
+since a solution is reachable from more than one path (fill cell 1 first and then cell 2 or do it in
+reverse order), the solutions returned are in general not unique. Also, because of the `concatMap` in
+`dfs`, it finds the solutions one by one in a lazy fashion. So it is possible to stop the search early
+and just get the first solution found.
+
+Let's try this out now in _ghci_:
 
 <pre>haskell
 *Sudoku> let boardStr = ".839216579.734582125187649354813297672956413813679824537268951481425376969541738."
@@ -357,6 +388,15 @@ Let's try this out in _ghci_ now:
 483921657967345821251876493548132976729564138136798245372689514814253769695417382
 (7.32 secs, 1322834576 bytes)
 </pre>
+
+And it solves the Sudoku as expected! Note how we have to use `nub` to find the unique solutions. Also
+note how the time take increases from 1.75 secs for 3 empty cells to 66.64 secs for 4 empty cells,
+indicating the exponential nature of the problem graph and the brute force nature of the solver. The 
+first solution in case of 4 empty cells is however found in just 7.32 secs using `head` to stop the 
+search early.
+
+So we have now successfully written our first Sudoku solver. Too bad it can't be used for solving boards
+with more than few empty cells. Let's see a way to improve the solver drastically, in the next section.
 
 Constraint propagation
 ----------------------
